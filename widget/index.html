@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body {
+    height:  100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+h1 {
+    display:  block;
+    font-family: sans-serif;
+    font-size: 2vw;
+    text-align: center;
+    color: #666;
+}
+iframe {
+    display: none;
+    width:  100%;
+    height: 100%;
+}
+</style>
+</head>
+<body>
+<h1>awaiting graph choice...</h1>
+<iframe></iframe>
+<script src="../ui-extensions-sdk.min.js"></script>
+<script>
+/* jshint esversion: 11 */
+let CURRENT_DASHBOARD = null;
+let DASHBOARDS = null;
+const client = window.DD_SDK.init();
+
+const handleChange = async obj => {
+    // document.querySelector("output").textContent = JSON.stringify(obj);
+    console.log("Setting", obj);
+
+    if (!obj.panel || obj.dashboard != CURRENT_DASHBOARD) {
+        CURRENT_DASHBOARD = obj.dashboard;
+        let res;
+        try {
+            res = await fetch("/widget/grafana.php?action=list-panels&uid=" + obj.dashboard);
+        } catch(e) {
+            console.error("fetcherr", e);
+        }
+        const cres = res.clone();
+        try {
+            res = await res.json();
+            let panels = {
+                type: "string",
+                name: 'panel',
+                label: "A panel from the chosen dashboard",
+                enum: res.map(r => { return {label: r.title, value: r.embed}; }),
+                // enforce a specific order to display the field in the widget editor
+                order: 1,
+            };
+            client.dashboard.customWidget.updateOptions([DASHBOARDS, panels]);
+
+        } catch(e) {
+            console.error("not json", await cres.text());
+        }
+    } else if (obj.panel) {
+        document.querySelector("iframe").src = obj.panel;
+        document.querySelector("iframe").style.display = "block";
+        document.querySelector("h1").style.display = "none";
+    }
+};
+
+client.getContext().then((c) => {
+    handleChange(c.widget?.definition?.options);
+});
+
+client.events.on(window.DD_SDK.EventType.DASHBOARD_CUSTOM_WIDGET_OPTIONS_CHANGE, (inputData) => {
+    handleChange(inputData);
+});
+
+const init = async () => {
+    let res;
+    try {
+        res = await fetch("/widget/grafana.php?action=list-dashboards");
+    } catch(e) {
+        console.error("fetcherr", e);
+    }
+    const cres = res.clone();
+    try {
+        res = await res.json();
+        DASHBOARDS = {
+            type: "string",
+            name: 'dashboard',
+            label: "A dashboard containing the Grafana graph to embed",
+            enum: res.map(r => { return {label: r.title, value: r.uid}; }),
+            // enforce a specific order to display the field in the widget editor
+            order: 1,
+        };
+        client.dashboard.customWidget.updateOptions([DASHBOARDS]);
+
+    } catch(e) {
+        console.error("not json", await cres.text());
+    }
+}
+
+init();
+
+</script>
+</body>
+</html>
